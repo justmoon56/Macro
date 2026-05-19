@@ -204,3 +204,12 @@ drag(emoteBtn,emoteLock,"emote")
 
     updateAllTransparency()
 end
+
+_G.createMacroUI = createMacroUI
+_G.getEmoteGui = function()
+    return emoteGui
+end
+
+_G.getCrouchGui = function()
+    return crouchGui
+end
