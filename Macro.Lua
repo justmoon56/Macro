@@ -1,5 +1,3 @@
--- Macro
-
 -- UI State
 local emoteGui, crouchGui
 local macroLoaded = false
@@ -13,8 +11,24 @@ _G.GuiPosition = _G.GuiPosition or {}
 _G.GuiLock = _G.GuiLock or {}
 _G.EmoteNumber = _G.EmoteNumber or 1
 
--- Hold Lock System
-local function holdSystem(button,callback,name)
+local function updateAllTransparency()
+    if emoteGui and crouchGui then
+        local emoteBtn = emoteGui:FindFirstChild("ImageButton")
+        local crouchBtn = crouchGui:FindFirstChild("ImageButton")
+        if emoteBtn then
+            emoteBtn.ImageTransparency = iconTransparency
+            local txt = emoteBtn:FindFirstChild("TextLabel")
+            if txt then txt.TextTransparency = textTransparency end
+        end
+        if crouchBtn then
+            crouchBtn.ImageTransparency = iconTransparency
+            local ico = crouchBtn:FindFirstChild("ImageLabel")
+            if ico then ico.ImageTransparency = iconTransparency end
+        end
+    end
+end
+
+local function holdSystem(button, callback, name)
     local HoldTime = 5
     local locked = _G.GuiLock[name] or false
     local holding = false
@@ -22,21 +36,19 @@ local function holdSystem(button,callback,name)
     local holdTriggered = false
 
     button.InputBegan:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1 
-        and input.UserInputType ~= Enum.UserInputType.Touch then return end
-
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
         holding = true
         holdStart = tick()
         holdTriggered = false
-
-        callback()
     end)
 
     button.InputEnded:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1 
-        and input.UserInputType ~= Enum.UserInputType.Touch then return end
-
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
         holding = false
+
+        if not holdTriggered then
+            callback()
+        end
     end)
 
     game:GetService("RunService").RenderStepped:Connect(function()
@@ -45,12 +57,17 @@ local function holdSystem(button,callback,name)
                 holdTriggered = true
                 locked = not locked
                 _G.GuiLock[name] = locked
-
-                Fluent:Notify({
-                    Title = "UI Lock",
-                    Content = locked and "Locked" or "Unlocked",
-                    Duration = 2
-                })
+                
+                -- Pemicu Notifikasi Fluent
+                if Fluent then
+                    Fluent:Notify({
+                        Title = locked and "Button Locked" or "Button Unlocked",
+                        Content = locked and "This button is now locked in place." or "This button can now be moved.",
+                        Duration = 2
+                    })
+                else
+                    print(name .. " Lock Status: " .. tostring(locked))
+                end
             end
         end
     end)
@@ -61,9 +78,8 @@ local function holdSystem(button,callback,name)
 end
 
 -- Drag System
-local function drag(button,isLocked,name)
+local function drag(button, isLocked, name)
     local UIS = game:GetService("UserInputService")
-
     local dragging = false
     local dragInput
     local dragStart
@@ -75,10 +91,7 @@ local function drag(button,isLocked,name)
 
     button.InputBegan:Connect(function(input)
         if isLocked and isLocked() then return end
-
-        if input.UserInputType == Enum.UserInputType.MouseButton1 
-        or input.UserInputType == Enum.UserInputType.Touch then
-
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragInput = input
             dragStart = input.Position
@@ -89,14 +102,10 @@ local function drag(button,isLocked,name)
     button.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
-
             button.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
             )
-
             _G.GuiPosition[name] = button.Position
         end
     end)
@@ -116,12 +125,11 @@ local function createMacroUI()
 
     local Players = game:GetService("Players")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
     local player = Players.LocalPlayer
     local guiPlayer = player:WaitForChild("PlayerGui")
 
-    local function fire(a,b)
-        player.PlayerScripts.Events.KeybindUsed:Fire(a,b)
+    local function fire(a, b)
+        player.PlayerScripts.Events.KeybindUsed:Fire(a, b)
     end
 
     -- EMOTE
@@ -130,49 +138,44 @@ local function createMacroUI()
     emoteGui.ResetOnSpawn = false
 
     local emoteBtn = Instance.new("ImageButton", emoteGui)
-    emoteBtn.Size = UDim2.new(0,BtnSize,0,BtnSize)
-    emoteBtn.Position = UDim2.new(1,-100,0.5,0)
+    emoteBtn.Size = UDim2.new(0, BtnSize, 0, BtnSize)
+    emoteBtn.Position = UDim2.new(1, -100, 0.5, 0)
     emoteBtn.BackgroundTransparency = 1
     emoteBtn.Image = "rbxassetid://16803802267"
     emoteBtn.ImageTransparency = 1
 
     local emoteIcon = Instance.new("TextLabel", emoteBtn)
     emoteIcon.BackgroundTransparency = 1
-    emoteIcon.Size = UDim2.new(1,0,1,0)
+    emoteIcon.Size = UDim2.new(1, 0, 1, 0)
     emoteIcon.Text = "☻"
     emoteIcon.TextScaled = true
     emoteIcon.TextTransparency = textTransparency
     emoteIcon.Font = Enum.Font.GothamBold
-    emoteIcon.TextColor3 = Color3.new(1,1,1)
+    emoteIcon.TextColor3 = Color3.new(1, 1, 1)
 
     local last = 0
+    local emoteLock = holdSystem(emoteBtn, function()
+        if tick() - last < 0.1 then return end
+        last = tick()
+        task.spawn(function()
+            pcall(function()
+                game.Workspace.Game.Players[player.Name].Equip:InvokeServer(2)
+            end)
+        end)
+        task.spawn(function()
+            pcall(function()
+                ReplicatedStorage.Events.Emote:FireServer(tostring(_G.EmoteNumber))
+            end)
+        end)
+        task.spawn(function()
+            local char = player.Character
+            if char then
+                fire("Crouch", not char:GetAttribute("Crouching"))
+            end
+        end)
+    end, "emote")
 
-local emoteLock = holdSystem(emoteBtn,function()
-	if tick() - last < 0.1 then return end
-	last = tick()
-
-	task.spawn(function()
-		pcall(function()
-			game.Workspace.Game.Players[player.Name].Equip:InvokeServer(2)
-		end)
-	end)
-
-	task.spawn(function()
-		pcall(function()
-			ReplicatedStorage.Events.Emote:FireServer(tostring(_G.EmoteNumber))
-		end)
-	end)
-
-	task.spawn(function()
-		local char = player.Character
-		if char then
-			fire("Crouch",not char:GetAttribute("Crouching"))
-		end
-	end)
-
-end,"emote")
-
-drag(emoteBtn,emoteLock,"emote")
+    drag(emoteBtn, emoteLock, "emote")
 
     -- CROUCH
     crouchGui = Instance.new("ScreenGui", guiPlayer)
@@ -180,36 +183,29 @@ drag(emoteBtn,emoteLock,"emote")
     crouchGui.ResetOnSpawn = false
 
     local crouchBtn = Instance.new("ImageButton", crouchGui)
-    crouchBtn.Size = UDim2.new(0,BtnSize,0,BtnSize)
-    crouchBtn.Position = UDim2.new(0,20,0.5,0)
+    crouchBtn.Size = UDim2.new(0, BtnSize, 0, BtnSize)
+    crouchBtn.Position = UDim2.new(0, 20, 0.5, 0)
     crouchBtn.BackgroundTransparency = 1
     crouchBtn.Image = "rbxassetid://16803802267"
     crouchBtn.ImageTransparency = 1
 
     local crouchIcon = Instance.new("ImageLabel", crouchBtn)
     crouchIcon.BackgroundTransparency = 1
-    crouchIcon.Size = UDim2.new(0.6,0,0.6,0)
-    crouchIcon.Position = UDim2.new(0.2,0,0.2,0)
+    crouchIcon.Size = UDim2.new(0.6, 0, 0.6, 0)
+    crouchIcon.Position = UDim2.new(0.2, 0, 0.2, 0)
     crouchIcon.Image = "rbxassetid://10238983204"
     crouchIcon.ImageTransparency = iconTransparency
 
-    local crouchLock = holdSystem(crouchBtn,function()
+    local crouchLock = holdSystem(crouchBtn, function()
         local char = player.Character
         if char then
             fire("Crouch", not char:GetAttribute("Crouching"))
         end
-    end,"crouch")
+    end, "crouch")
 
     drag(crouchBtn, crouchLock, "crouch")
 
     updateAllTransparency()
 end
 
-_G.createMacroUI = createMacroUI
-_G.getEmoteGui = function()
-    return emoteGui
-end
-
-_G.getCrouchGui = function()
-    return crouchGui
-end
+_G.CreateMacroUI = createMacroUI
