@@ -37,8 +37,8 @@ local function MakeMacroHoldAndDrag(button, callback, name)
     local StartPosition
 
     local Holding = false
-    local HoldTime = 5.0
-    local MoveCancelThreshold = 6
+    local HoldTime = 0.5
+    local MoveCancelThreshold = 0.6
     local HoldToken = 0
     local LockTriggered = false
 
@@ -104,6 +104,114 @@ local function MakeMacroHoldAndDrag(button, callback, name)
                 end
             end
         end)
+    end)
+
+    button.InputChanged:Connect(function(input)
+        if not DragStart then return end
+
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+            if (input.Position - DragStart).Magnitude > MoveCancelThreshold then
+                Holding = false
+            end
+            DragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == DragInput and Dragging then
+            Update(input)
+        end
+    end)
+end
+
+-- Create UI
+local function createMacroUI()
+    if macroLoaded then return end
+    macroLoaded = true
+
+    local Players = game:GetService("Players")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local player = Players.LocalPlayer
+    local guiPlayer = player:WaitForChild("PlayerGui")
+
+    local function fire(a, b)
+        player.PlayerScripts.Events.KeybindUsed:Fire(a, b)
+    end
+
+    -- EMOTE
+    emoteGui = Instance.new("ScreenGui", guiPlayer)
+    emoteGui.Name = "EmoteGui"
+    emoteGui.ResetOnSpawn = false
+
+    local emoteBtn = Instance.new("ImageButton", emoteGui)
+    emoteBtn.Size = UDim2.new(0, BtnSize, 0, BtnSize)
+    emoteBtn.Position = _G.GuiPosition["emote"] or UDim2.new(1, -100, 0.5, 0)
+    emoteBtn.BackgroundTransparency = 1
+    emoteBtn.Image = "rbxassetid://16803802267"
+    emoteBtn.ImageTransparency = 1
+
+    local emoteIcon = Instance.new("TextLabel", emoteBtn)
+    emoteIcon.BackgroundTransparency = 1
+    emoteIcon.Size = UDim2.new(1, 0, 1, 0)
+    emoteIcon.Text = "☻"
+    emoteIcon.TextScaled = true
+    emoteIcon.TextTransparency = textTransparency
+    emoteIcon.Font = Enum.Font.GothamBold
+    emoteIcon.TextColor3 = Color3.new(1, 1, 1)
+
+    local last = 0
+    MakeMacroHoldAndDrag(emoteBtn, function()
+        if tick() - last < 0.1 then return end
+        last = tick()
+        task.spawn(function()
+            pcall(function()
+                game.Workspace.Game.Players[player.Name].Equip:InvokeServer(2)
+            end)
+        end)
+        task.spawn(function()
+            pcall(function()
+                ReplicatedStorage.Events.Emote:FireServer(tostring(_G.EmoteNumber))
+            end)
+        end)
+        task.spawn(function()
+            local char = player.Character
+            if char then
+                fire("Crouch", not char:GetAttribute("Crouching"))
+            end
+        end)
+    end, "emote")
+
+    -- CROUCH
+    crouchGui = Instance.new("ScreenGui", guiPlayer)
+    crouchGui.Name = "CrouchGui"
+    crouchGui.ResetOnSpawn = false
+
+    local crouchBtn = Instance.new("ImageButton", crouchGui)
+    crouchBtn.Size = UDim2.new(0, BtnSize, 0, BtnSize)
+    crouchBtn.Position = _G.GuiPosition["crouch"] or UDim2.new(0, 20, 0.5, 0)
+    crouchBtn.BackgroundTransparency = 1
+    crouchBtn.Image = "rbxassetid://16803802267"
+    crouchBtn.ImageTransparency = 1
+
+    local crouchIcon = Instance.new("ImageLabel", crouchBtn)
+    crouchIcon.BackgroundTransparency = 1
+    crouchIcon.Size = UDim2.new(0.6, 0, 0.6, 0)
+    crouchIcon.Position = UDim2.new(0.2, 0, 0.2, 0)
+    crouchIcon.Image = "rbxassetid://10238983204"
+    crouchIcon.ImageTransparency = iconTransparency
+
+    MakeMacroHoldAndDrag(crouchBtn, function()
+        local char = player.Character
+        if char then
+            fire("Crouch", not char:GetAttribute("Crouching"))
+        end
+    end, "crouch")
+
+    updateAllTransparency()
+end
+
+_G.CreateMacroUI = createMacroUI        end)
     end)
 
     button.InputChanged:Connect(function(input)
