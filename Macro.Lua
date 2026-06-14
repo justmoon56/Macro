@@ -28,92 +28,99 @@ local function updateAllTransparency()
     end
 end
 
-local function holdSystem(button, callback, name)
-    local HoldTime = 5
-    local locked = _G.GuiLock[name] or false
-    local holding = false
-    local holdStart = 0
-    local holdTriggered = false
+local function MakeMacroHoldAndDrag(button, callback, name)
+    local UserInputService = game:GetService("UserInputService")
+    
+    local Dragging = false
+    local DragInput
+    local DragStart
+    local StartPosition
+
+    local Holding = false
+    local HoldTime = 5.0
+    local MoveCancelThreshold = 6
+    local HoldToken = 0
+    local LockTriggered = false
+
+    local isLocked = _G.GuiLock[name] or false
+
+    local function Update(input)
+        if isLocked then return end
+        local delta = input.Position - DragStart
+        button.Position = UDim2.new(
+            StartPosition.X.Scale,
+            StartPosition.X.Offset + delta.X,
+            StartPosition.Y.Scale,
+            StartPosition.Y.Offset + delta.Y
+        )
+        _G.GuiPosition[name] = button.Position
+    end
+
+    local function ToggleLock()
+        isLocked = not isLocked
+        _G.GuiLock[name] = isLocked
+
+        if Fluent then
+            Fluent:Notify({
+                Title = isLocked and "Button Locked" or "Button Unlocked",
+                Content = isLocked and "This button is now locked in place." or "This button can now be moved.",
+                Duration = 2
+            })
+        end
+    end
 
     button.InputBegan:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-        holding = true
-        holdStart = tick()
-        holdTriggered = false
-    end)
-
-    button.InputEnded:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-        holding = false
-
-        if not holdTriggered then
-            callback()
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+        and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
         end
-    end)
 
-    game:GetService("RunService").RenderStepped:Connect(function()
-        if holding and not holdTriggered then
-            if tick() - holdStart >= HoldTime then
-                holdTriggered = true
-                locked = not locked
-                _G.GuiLock[name] = locked
+        Dragging = not isLocked
+        Holding = true
+        LockTriggered = false
+        DragStart = input.Position
+        StartPosition = button.Position
+
+        HoldToken = HoldToken + 1
+        local token = HoldToken
+
+        task.delay(HoldTime, function()
+            if Holding and token == HoldToken then
+                LockTriggered = true
+                ToggleLock()
+            end
+        end)
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                Dragging = false
+                Holding = false
                 
-                -- Pemicu Notifikasi Fluent
-                if Fluent then
-                    Fluent:Notify({
-                        Title = locked and "Button Locked" or "Button Unlocked",
-                        Content = locked and "This button is now locked in place." or "This button can now be moved.",
-                        Duration = 2
-                    })
-                else
-                    print(name .. " Lock Status: " .. tostring(locked))
+                if not LockTriggered then
+                    local movement = (input.Position - DragStart).Magnitude
+                    if movement < MoveCancelThreshold then
+                        callback() -- Jalankan macro (Emote/Crouch)
+                    end
                 end
             end
-        end
-    end)
-
-    return function()
-        return locked
-    end
-end
-
--- Drag System
-local function drag(button, isLocked, name)
-    local UIS = game:GetService("UserInputService")
-    local dragging = false
-    local dragInput
-    local dragStart
-    local startPos
-
-    if _G.GuiPosition[name] then
-        button.Position = _G.GuiPosition[name]
-    end
-
-    button.InputBegan:Connect(function(input)
-        if isLocked and isLocked() then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragInput = input
-            dragStart = input.Position
-            startPos = button.Position
-        end
+        end)
     end)
 
     button.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            button.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
-            _G.GuiPosition[name] = button.Position
+        if not DragStart then return end
+
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+            if (input.Position - DragStart).Magnitude > MoveCancelThreshold then
+                Holding = false
+            end
+            DragInput = input
         end
     end)
 
-    UIS.InputEnded:Connect(function(input)
-        if input == dragInput then
-            dragging = false
-            dragInput = nil
+    UserInputService.InputChanged:Connect(function(input)
+        if input == DragInput and Dragging then
+            Update(input)
         end
     end)
 end
@@ -139,7 +146,7 @@ local function createMacroUI()
 
     local emoteBtn = Instance.new("ImageButton", emoteGui)
     emoteBtn.Size = UDim2.new(0, BtnSize, 0, BtnSize)
-    emoteBtn.Position = UDim2.new(1, -100, 0.5, 0)
+    emoteBtn.Position = _G.GuiPosition["emote"] or UDim2.new(1, -100, 0.5, 0)
     emoteBtn.BackgroundTransparency = 1
     emoteBtn.Image = "rbxassetid://16803802267"
     emoteBtn.ImageTransparency = 1
@@ -154,7 +161,7 @@ local function createMacroUI()
     emoteIcon.TextColor3 = Color3.new(1, 1, 1)
 
     local last = 0
-    local emoteLock = holdSystem(emoteBtn, function()
+    MakeMacroHoldAndDrag(emoteBtn, function()
         if tick() - last < 0.1 then return end
         last = tick()
         task.spawn(function()
@@ -175,8 +182,6 @@ local function createMacroUI()
         end)
     end, "emote")
 
-    drag(emoteBtn, emoteLock, "emote")
-
     -- CROUCH
     crouchGui = Instance.new("ScreenGui", guiPlayer)
     crouchGui.Name = "CrouchGui"
@@ -184,7 +189,7 @@ local function createMacroUI()
 
     local crouchBtn = Instance.new("ImageButton", crouchGui)
     crouchBtn.Size = UDim2.new(0, BtnSize, 0, BtnSize)
-    crouchBtn.Position = UDim2.new(0, 20, 0.5, 0)
+    crouchBtn.Position = _G.GuiPosition["crouch"] or UDim2.new(0, 20, 0.5, 0)
     crouchBtn.BackgroundTransparency = 1
     crouchBtn.Image = "rbxassetid://16803802267"
     crouchBtn.ImageTransparency = 1
@@ -196,14 +201,12 @@ local function createMacroUI()
     crouchIcon.Image = "rbxassetid://10238983204"
     crouchIcon.ImageTransparency = iconTransparency
 
-    local crouchLock = holdSystem(crouchBtn, function()
+    MakeMacroHoldAndDrag(crouchBtn, function()
         local char = player.Character
         if char then
             fire("Crouch", not char:GetAttribute("Crouching"))
         end
     end, "crouch")
-
-    drag(crouchBtn, crouchLock, "crouch")
 
     updateAllTransparency()
 end
