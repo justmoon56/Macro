@@ -60,7 +60,7 @@ local function MakeMacroHoldAndDrag(button, callback, name)
         isLocked = not isLocked
         _G.GuiLock[name] = isLocked
 
-        if Fluent then
+        if isLocked then
             Fluent:Notify({
                 Title = isLocked and "Button Locked" or "Button Unlocked",
                 Content = isLocked and "This button is now locked in place." or "This button can now be moved.",
