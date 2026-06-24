@@ -20,7 +20,7 @@ local function MakeDraggable(topbarobject, object, locked)
     local StartPosition
 
     local Holding = false
-    local HoldTime = 5.0 -- Diubah ke 5.0 detik khusus permintaanmu
+    local HoldTime = 5.0
     local MoveCancelThreshold = 6
     local HoldToken = 0
 
@@ -67,18 +67,22 @@ local function MakeDraggable(topbarobject, object, locked)
         StartPosition = object.Position
 
         HoldToken += 1
-        local token = HoldToken
+        local currentToken = HoldToken
 
         task.delay(HoldTime, function()
-            if Holding and token == HoldToken then
+            if Holding and currentToken == HoldToken then
                 ToggleLock()
+                Holding = false
+                Dragging = false
             end
         end)
 
-        input.Changed:Connect(function()
+        local disconnectConnection
+        disconnectConnection = input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
                 Dragging = false
                 Holding = false
+                disconnectConnection:Disconnect()
             end
         end)
     end)
