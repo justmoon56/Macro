@@ -47,7 +47,7 @@ local function MakeDraggable(topbarobject, object, locked)
         if Fluent then
             Fluent:Notify({
                 Title = newState and "Button Locked" or "Button Unlocked",
-                Content = newState and "This button is now locked in place." or "This button can now be moved.",
+                Content = newState and "This button is now locked in place." or "This button can be move now.",
                 Duration = 2
             })
         else
